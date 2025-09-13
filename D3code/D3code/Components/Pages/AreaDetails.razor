@@ -1,0 +1,381 @@
+﻿@page "/area-details/{AreaId:int}"
+@inject IHttpClientFactory HttpClientFactory
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+@using System.Net.Http.Json
+@using System.Text.Json
+<div class="container mx-auto p-4">
+    <h1 class="mb-4 text-3xl font-bold text-gray-800">Detalles del Área: @AreaName</h1>
+    @if (isLoading)
+    {
+        <div class="flex items-center justify-center">
+            <div class="h-8 w-8 animate-spin rounded-full border-t-2 border-b-2 border-blue-500"></div>
+            <span class="ml-2 text-gray-700">Cargando...</span>
+        </div>
+    }
+    else if (areaInfo == null)
+    {
+        <p class="text-red-500">No se encontraron detalles para esta área.</p>
+    }
+    else
+    {
+        <div class="mb-6 rounded-lg bg-white p-6 shadow">
+            <h2 class="mb-2 text-xl font-semibold text-gray-700">Información General</h2>
+            <p><strong>Latitud:</strong> @areaInfo.Latitude</p>
+            <p><strong>Longitud:</strong> @areaInfo.Longitude</p>
+            <p><strong>Tipo de Red:</strong> @areaInfo.GridType</p>
+            <p><strong>Demanda Promedio (MWh):</strong> @areaInfo.AverageDemandMWh?.ToString("F2") ?? "N/A"</p>
+            <p><strong>Generación Promedio (MWh):</strong> @areaInfo.AverageGenerationMWh?.ToString("F2") ?? "N/A"</p>
+            <p><strong>Outages Totales:</strong> @areaInfo.TotalOutages</p>
+        </div>
+        <button class="rounded bg-blue-500 px-4 py-2 font-bold text-white hover:bg-blue-700"
+                @onclick="GeneratePrediction">
+            Generar Predicciones para Todas las Áreas
+        </button>
+        <button class="ml-2 rounded bg-green-500 px-4 py-2 font-bold text-white hover:bg-green-700"
+                @onclick="ExportForQuantumAnalyst">
+            Exportar para Analista Cuántico
+        </button>
+        @if (!string.IsNullOrEmpty(predictionMessage))
+        {
+            <div class="mt-4 rounded border @(predictionMessage.Contains("Error") ? "border-red-400 bg-red-100 text-red-700" : "border-green-400 bg-green-100 text-green-700") p-4">
+                <p>@predictionMessage</p>
+            </div>
+        }
+        @if (areaPredictions != null && areaPredictions.Any())
+        {
+            <div class="mt-4">
+                <h2 class="mb-2 text-xl font-semibold text-gray-700">Predicciones por Área</h2>
+                @foreach (var prediction in areaPredictions)
+                {
+                    <div class="mb-4 rounded-lg bg-white p-4 shadow">
+                        <h3 class="mb-2 text-lg font-semibold">Área ID: @prediction.Key</h3>
+                        <p><strong>Demanda Promedio Histórica:</strong> @prediction.Value.historical_avg_demand_mwh.ToString("F2") MWh</p>
+                        <p><strong>Riesgo:</strong> @prediction.Value.overall_risk_assessment.level (@prediction.Value.overall_risk_assessment.average_risk_percentage.ToString("F2")%)</p>
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+@code {
+    [Parameter]
+    public int AreaId { get; set; }
+    private bool isLoading = false;
+    private string? AreaName { get; set; }
+    private AreaDetailsDto? areaInfo;
+    private string predictionMessage = string.Empty;
+    private Dictionary<int, AreaPredictionDto>? areaPredictions;
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("EnerQuantumApi");
+            var response = await client.GetAsync($"/api/Areas/{AreaId}");
+            if (response.IsSuccessStatusCode)
+            {
+                areaInfo = await response.Content.ReadFromJsonAsync<AreaDetailsDto>();
+                AreaName = areaInfo?.Name;
+            }
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task GeneratePrediction()
+    {
+        if (areaInfo == null) return;
+        isLoading = true;
+        predictionMessage = string.Empty;
+        areaPredictions = null;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("EnerQuantumApi");
+            var dataResponse = await client.GetAsync("/api/Areas/AllAreas");
+            if (dataResponse.IsSuccessStatusCode)
+            {
+                var data = await dataResponse.Content.ReadFromJsonAsync<AllAreaDataDto>();
+
+                // Flatten: Merge energy_usage + climate_events on timestamp/area_id + areas lookup
+                var flattenedData = new List<object>();
+                foreach (var eu in data.energy_usage)
+                {
+                    var matchingClimate = data.climate_events.FirstOrDefault(ce =>
+                        ce.start_timestamp.Date == eu.timestamp.Date &&
+                        ce.start_timestamp.Hour == eu.timestamp.Hour &&
+                        ce.area_id == eu.area_id);
+                    var matchingArea = data.areas.FirstOrDefault(a => a.area_id == eu.area_id);
+
+                    var record = new
+                    {
+                        timestamp = eu.timestamp,
+                        areaId = eu.area_id,
+                        areaName = matchingArea?.name ?? "Unknown",
+                        latitude = matchingArea?.latitude,
+                        longitude = matchingArea?.longitude,
+                        gridType = matchingArea?.gridType,
+                        generationMwh = eu.generation_mwh,
+                        demandMwh = eu.demand_mwh,
+                        serviceStatus = eu.serviceStatus,
+                        lossesPct = eu.losses_pct,
+                        circuit = eu.circuit,
+                        durationHours = eu.durationHours,
+                        importMwh = eu.import_mwh,
+                        exportMwh = eu.export_mwh,
+                        netExchangeMwh = eu.net_exchange_mwh,
+                        tempC = matchingClimate?.temp_c,
+                        tempMinC = matchingClimate?.temp_min_c,
+                        tempMaxC = matchingClimate?.temp_max_c,
+                        climateCondition = matchingClimate?.climate_condition,
+                        phenomenon = matchingClimate?.phenomenon,
+                        durationHoursClimate = matchingClimate?.durationHours,
+                        precipitationMm = matchingClimate?.precipitation_mm,
+                        windSpeedMps = matchingClimate?.wind_speed_mps,
+                        pressureHpa = matchingClimate?.pressure_hpa
+                    };
+                    flattenedData.Add(record);
+                }
+
+                // Log flattened data for debugging
+                Console.WriteLine("Flattened Data: " + JsonSerializer.Serialize(flattenedData, new JsonSerializerOptions { WriteIndented = true }));
+
+                var apiClient = HttpClientFactory.CreateClient();
+                apiClient.BaseAddress = new Uri("http://localhost:8001");
+                var content = new { json_data = flattenedData }; // Wrap in json_data
+                var predictResponse = await apiClient.PostAsJsonAsync("/predict?prediction_hours=24", content);
+                if (predictResponse.IsSuccessStatusCode)
+                {
+                    areaPredictions = await predictResponse.Content.ReadFromJsonAsync<Dictionary<int, AreaPredictionDto>>();
+                    Console.WriteLine(predictResponse.Content.ReadAsStringAsync());
+                    predictionMessage = "Predicciones generadas exitosamente.";
+                }
+                else
+                {
+                    predictionMessage = $"Error en predicción: {await predictResponse.Content.ReadAsStringAsync()}";
+                }
+            }
+            else
+            {
+                predictionMessage = $"Error al obtener datos: {await dataResponse.Content.ReadAsStringAsync()}";
+            }
+        }
+        catch (Exception ex)
+        {
+            predictionMessage = $"Error al generar predicción: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+
+// DTO para FastAPI
+public class QuantumPayload
+{
+    public List<Dictionary<string, object?>> json_data { get; set; } = new();
+}
+
+private async Task ExportForQuantumAnalyst()
+{
+    if (areaInfo == null) return;
+
+    isLoading = true;
+    predictionMessage = string.Empty;
+
+    try
+    {
+        var client = HttpClientFactory.CreateClient("EnerQuantumApi");
+        var dataResponse = await client.GetAsync("/api/Areas/AllAreas");
+        if (!dataResponse.IsSuccessStatusCode)
+        {
+            predictionMessage = $"Error al obtener datos: {await dataResponse.Content.ReadAsStringAsync()}";
+            return;
+        }
+
+        var data = await dataResponse.Content.ReadFromJsonAsync<AllAreaDataDto>();
+        if (data == null)
+        {
+            predictionMessage = "Error: datos recibidos nulos.";
+            return;
+        }
+
+        // Convertimos los datos a diccionarios
+        var flattenedData = data.energy_usage.Select(eu =>
+        {
+            var matchingClimate = data.climate_events.FirstOrDefault(ce =>
+                ce.start_timestamp.Date == eu.timestamp.Date &&
+                ce.start_timestamp.Hour == eu.timestamp.Hour &&
+                ce.area_id == eu.area_id);
+
+            var matchingArea = data.areas.FirstOrDefault(a => a.area_id == eu.area_id);
+
+            return new Dictionary<string, object?>
+            {
+                ["timestamp"] = eu.timestamp.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                ["areaId"] = eu.area_id,
+                ["areaName"] = matchingArea?.name ?? "",
+                ["latitude"] = matchingArea?.latitude ?? 0,
+                ["longitude"] = matchingArea?.longitude ?? 0,
+                ["gridType"] = matchingArea?.gridType ?? "",
+                ["generationMwh"] = eu.generation_mwh,
+                ["demandMwh"] = eu.demand_mwh,
+                ["serviceStatus"] = eu.serviceStatus ?? "",
+                ["lossesPct"] = eu.losses_pct,
+                ["circuit"] = eu.circuit ?? "",
+                ["durationHours"] = eu.durationHours,
+                ["importMwh"] = eu.import_mwh,
+                ["exportMwh"] = eu.export_mwh,
+                ["netExchangeMwh"] = eu.net_exchange_mwh,
+                ["tempC"] = matchingClimate?.temp_c,
+                ["tempMinC"] = matchingClimate?.temp_min_c,
+                ["tempMaxC"] = matchingClimate?.temp_max_c,
+                ["climateCondition"] = matchingClimate?.climate_condition ?? "",
+                ["phenomenon"] = matchingClimate?.phenomenon ?? "",
+                ["durationHoursClimate"] = matchingClimate?.durationHours,
+                ["precipitationMm"] = matchingClimate?.precipitation_mm,
+                ["windSpeedMps"] = matchingClimate?.wind_speed_mps,
+                ["pressureHpa"] = matchingClimate?.pressure_hpa
+            };
+        }).ToList();
+
+        // Armamos el payload como clase concreta
+        var payload = new QuantumPayload { json_data = flattenedData };
+
+        // Serializamos explícitamente
+        var jsonString = JsonSerializer.Serialize(payload);
+        var content = new StringContent(jsonString, System.Text.Encoding.UTF8, "application/json");
+
+        var apiClient = HttpClientFactory.CreateClient();
+        apiClient.BaseAddress = new Uri("http://localhost:8001");
+
+        var predictResponse = await apiClient.PostAsync("/quantum-analyst?format=csv&prediction_hours=24", content);
+
+        if (predictResponse.IsSuccessStatusCode)
+        {
+            var csvContent = await predictResponse.Content.ReadAsStringAsync();
+            await JSRuntime.InvokeVoidAsync("downloadFile",
+                $"quantum_predictions_{DateTime.Now:yyyyMMdd_HHmmss}.csv",
+                "text/csv",
+                csvContent);
+
+            predictionMessage = "Exportación para analista cuántico completada. CSV descargado.";
+        }
+        else
+        {
+            predictionMessage = $"Error en exportación: {await predictResponse.Content.ReadAsStringAsync()}";
+        }
+    }
+    catch (Exception ex)
+    {
+        predictionMessage = $"Excepción: {ex.Message}";
+    }
+    finally
+    {
+        isLoading = false;
+    }
+}
+
+
+
+
+    public class AreaDetailsDto
+    {
+        public int AreaId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+        public string GridType { get; set; } = string.Empty;
+        public double? AverageDemandMWh { get; set; }
+        public double? AverageGenerationMWh { get; set; }
+        public int TotalOutages { get; set; }
+    }
+
+    public class AreaPredictionDto
+    {
+        public int area_id { get; set; }
+        public string prediction_timestamp { get; set; } = string.Empty;
+        public double generation_capacity_mwh { get; set; }
+        public double historical_avg_demand_mwh { get; set; }
+        public double historical_max_demand_mwh { get; set; }
+        public RiskAssessment overall_risk_assessment { get; set; } = new RiskAssessment();
+        public List<PredictionDetail> predictions { get; set; } = new List<PredictionDetail>();
+    }
+
+    public class RiskAssessment
+    {
+        public string level { get; set; } = string.Empty;
+        public double average_risk_percentage { get; set; }
+    }
+
+    public class PredictionDetail
+    {
+        public string timestamp { get; set; } = string.Empty;
+        public double estimated_demand_mwh { get; set; }
+        public double heat_index { get; set; }
+        public double temperature_c { get; set; }
+        public BlackoutRisk blackout_risk { get; set; } = new BlackoutRisk();
+    }
+
+    public class BlackoutRisk
+    {
+        public string risk_level { get; set; } = string.Empty;
+        public double risk_percentage { get; set; }
+        public string blackout_probability { get; set; } = string.Empty;
+        public double capacity_utilization { get; set; }
+        public double safety_margin_mwh { get; set; }
+        public double demand_vs_critical_load { get; set; }
+        public double emergency_reserves_needed { get; set; }
+    }
+
+    public class AllAreaDataDto
+    {
+        public List<AreaDto> areas { get; set; } = new();
+        public List<EnergyUsageDto> energy_usage { get; set; } = new();
+        public List<ClimateEventDto> climate_events { get; set; } = new();
+        public Dictionary<string, object> infrastructure { get; set; } = new();
+    }
+
+    public class AreaDto
+    {
+        public int area_id { get; set; }
+        public string name { get; set; } = string.Empty;
+        public double latitude { get; set; }
+        public double longitude { get; set; }
+        public string gridType { get; set; } = string.Empty;
+    }
+
+    public class EnergyUsageDto
+    {
+        public DateTime timestamp { get; set; }
+        public int area_id { get; set; }
+        public double generation_mwh { get; set; }
+        public double demand_mwh { get; set; }
+        public string serviceStatus { get; set; } = string.Empty;
+        public double losses_pct { get; set; }
+        public string circuit { get; set; } = string.Empty;
+        public double durationHours { get; set; }
+        public double? import_mwh { get; set; }
+        public double? export_mwh { get; set; }
+        public double? net_exchange_mwh { get; set; }
+    }
+
+    public class ClimateEventDto
+    {
+        public DateTime start_timestamp { get; set; }
+        public int area_id { get; set; }
+        public double temp_c { get; set; }
+        public double temp_min_c { get; set; }
+        public double temp_max_c { get; set; }
+        public string climate_condition { get; set; } = string.Empty;
+        public string phenomenon { get; set; } = string.Empty;
+        public double durationHours { get; set; }
+        public double precipitation_mm { get; set; }
+        public double wind_speed_mps { get; set; }
+        public double pressure_hpa { get; set; }
+    }
+}

@@ -1,64 +1,71 @@
-﻿@page "/weather"
-@attribute [StreamRendering]
+﻿@page "/generate-data"
+@inject IHttpClientFactory HttpClientFactory
+@rendermode InteractiveServer
+@using System.Net.Http.Json
 
-<PageTitle>Weather</PageTitle>
+<div class="container mx-auto p-4">
+    <h1 class="mb-4 text-2xl font-bold text-gray-800">Generar Datos para EnerQuantum</h1>
+    <p class="mb-4 text-gray-600">
+        Esta página genera datos simulados para el hospital de León, Guanajuato (90 días, 2160 filas).
+        Presiona el botón para generar datos de energía y clima.
+    </p>
 
-<h1>Weather</h1>
-
-<p>This component demonstrates showing data.</p>
-
-@if (forecasts == null)
-{
-    <p><em>Loading...</em></p>
-}
-else
-{
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th aria-label="Temperature in Celsius">Temp. (C)</th>
-                <th aria-label="Temperature in Farenheit">Temp. (F)</th>
-                <th>Summary</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var forecast in forecasts)
-            {
-                <tr>
-                    <td>@forecast.Date.ToShortDateString()</td>
-                    <td>@forecast.TemperatureC</td>
-                    <td>@forecast.TemperatureF</td>
-                    <td>@forecast.Summary</td>
-                </tr>
-            }
-        </tbody>
-    </table>
-}
-
-@code {
-    private WeatherForecast[]? forecasts;
-
-    protected override async Task OnInitializedAsync()
+    @if (isLoading)
     {
-        // Simulate asynchronous loading to demonstrate streaming rendering
-        await Task.Delay(500);
-
-        var startDate = DateOnly.FromDateTime(DateTime.Now);
-        var summaries = new[] { "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching" };
-        forecasts = Enumerable.Range(1, 5).Select(index => new WeatherForecast
-        {
-            Date = startDate.AddDays(index),
-            TemperatureC = Random.Shared.Next(-20, 55),
-            Summary = summaries[Random.Shared.Next(summaries.Length)]
-        }).ToArray();
+        <div class="flex items-center justify-center">
+            <div class="h-8 w-8 animate-spin rounded-full border-t-2 border-b-2 border-blue-500"></div>
+            <span class="ml-2 text-gray-700">Generando datos...</span>
+        </div>
+    }
+    else
+    {
+        <button class="rounded bg-blue-500 px-4 py-2 font-bold text-white hover:bg-blue-700"
+                @onclick="GenerateData">
+            Generar Datos del Hospital
+        </button>
     }
 
-    private class WeatherForecast
+    @if (!string.IsNullOrEmpty(message))
     {
-        public DateOnly Date { get; set; }
-        public int TemperatureC { get; set; }
-        public string? Summary { get; set; }
-        public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
+        <div class="mt-4 rounded p-4 @messageClass">
+            <p>@message</p>
+        </div>
+    }
+</div>
+
+@code {
+    private bool isLoading = false;
+    private string message = string.Empty;
+    private string messageClass = string.Empty;
+
+    private async Task GenerateData()
+    {
+        isLoading = true;
+        message = string.Empty;
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("EnerQuantumApi");
+            var response = await client.PostAsync("/api/EnergyDemand/GenerateHospitalData", null);
+            if (response.IsSuccessStatusCode)
+            {
+                message = await response.Content.ReadAsStringAsync();
+                messageClass = "bg-green-100 border border-green-400 text-green-700";
+            }
+            else
+            {
+                message = $"Error: {response.StatusCode} - {await response.Content.ReadAsStringAsync()}";
+                messageClass = "bg-red-100 border border-red-400 text-red-700";
+            }
+        }
+        catch (Exception ex)
+        {
+            message = $"Error al generar datos: {ex.Message}";
+            messageClass = "bg-red-100 border border-red-400 text-red-700";
+        }
+        finally
+        {
+            isLoading = false;
+        }
     }
 }
