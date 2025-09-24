@@ -4,118 +4,168 @@
 @rendermode InteractiveServer
 @using System.Net.Http.Json
 @using System.Text.Json
-<div class="container mx-auto p-4">
-    <h1 class="mb-4 text-3xl font-bold text-gray-800">Detalles del Área: @AreaName</h1>
+<div class="container mx-auto min-h-screen bg-white p-6">
+    <h1 class="mb-6 text-4xl font-extrabold tracking-tight text-blue-900">Leon Hospital Data</h1>
     @if (isLoading)
     {
-        <div class="flex items-center justify-center">
-            <div class="h-8 w-8 animate-spin rounded-full border-t-2 border-b-2 border-blue-500"></div>
-            <span class="ml-2 text-gray-700">Cargando...</span>
+        <div class="flex items-center justify-center py-12">
+            <div class="h-12 w-12 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
+            <span class="ml-3 text-lg font-medium text-gray-700">Loading...</span>
         </div>
     }
     else if (areaInfo == null)
     {
-        <p class="text-red-500">No se encontraron detalles para esta área.</p>
+        <div class="flex items-center rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+            <svg class="mr-2 h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+            </svg>
+            <p>No details found for this area.</p>
+        </div>
     }
     else
     {
-        <div class="mb-6 rounded-lg bg-white p-6 shadow">
-            <h2 class="mb-2 text-xl font-semibold text-gray-700">Información General</h2>
-            <p><strong>Latitud:</strong> @areaInfo.Latitude</p>
-            <p><strong>Longitud:</strong> @areaInfo.Longitude</p>
-            <p><strong>Tipo de Red:</strong> @areaInfo.GridType</p>
-            <p><strong>Demanda Promedio (MWh):</strong> @areaInfo.AverageDemandMWh?.ToString("F2") ?? "N/A"</p>
-            <p><strong>Generación Promedio (MWh):</strong> @areaInfo.AverageGenerationMWh?.ToString("F2") ?? "N/A"</p>
-            <p><strong>Outages Totales:</strong> @areaInfo.TotalOutages</p>
+        <div class="mb-8 rounded-xl border border-gray-100 bg-white p-6 shadow-lg">
+            <h2 class="mb-4 text-2xl font-semibold text-blue-900">General Information</h2>
+            <div class="grid grid-cols-1 gap-4 text-gray-700 sm:grid-cols-2">
+                <p><strong class="font-medium">Latitude:</strong> @areaInfo.Latitude</p>
+                <p><strong class="font-medium">Longitude:</strong> @areaInfo.Longitude</p>
+                <p><strong class="font-medium">Grid Type:</strong> @areaInfo.GridType</p>
+                <p><strong class="font-medium">Average Demand (MWh):</strong> @areaInfo.AverageDemandMWh?.ToString("F2")"</p>
+                <p><strong class="font-medium">Average Generation (MWh):</strong> @areaInfo.AverageGenerationMWh?.ToString("F2")</p>
+                <p><strong class="font-medium">Total Outages:</strong> @areaInfo.TotalOutages</p>
+            </div>
         </div>
-        <div class="mb-4">
-            <button class="rounded bg-blue-500 px-4 py-2 font-bold text-white hover:bg-blue-700"
+        <div class="mb-6 flex space-x-4">
+            <button class="rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white transition-colors duration-200 hover:bg-blue-700"
                     @onclick="GeneratePrediction">
-                Generar Predicciones y Optimización Cuántica
+                Generate Predictions and Quantum Optimization
             </button>
-            <button class="ml-2 rounded bg-green-500 px-4 py-2 font-bold text-white hover:bg-green-700"
+            <button class="rounded-lg bg-green-600 px-6 py-3 font-semibold text-white transition-colors duration-200 hover:bg-green-700"
                     @onclick="ExportForQuantumAnalyst">
-                Exportar para Analista Cuántico
+                Export for Quantum Analyst (Debug)
             </button>
         </div>
         @if (!string.IsNullOrEmpty(predictionMessage))
         {
-            <div class="mt-4 rounded border @(predictionMessage.Contains("Error") ? "border-red-400 bg-red-100 text-red-700" : "border-green-400 bg-green-100 text-green-700") p-4">
+            <div class="mt-6 flex items-center rounded-lg border p-4 @(predictionMessage.Contains("Error") ? "border-red-200 bg-red-50 text-red-700" : "border-green-200 bg-green-50 text-green-700")">
+                @if (predictionMessage.Contains("Error"))
+                {
+                    <svg class="mr-2 h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                    </svg>
+                }
+                else
+                {
+                    <svg class="mr-2 h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" />
+                    </svg>
+                }
                 <p>@predictionMessage</p>
             </div>
         }
         @if (areaPredictions != null && areaPredictions.Any())
         {
-            <div class="mt-4">
-                <h2 class="mb-2 text-xl font-semibold text-gray-700">Predicciones de Demanda por Área</h2>
+            <div class="mt-6">
+                <h2 class="mb-4 text-2xl font-semibold text-blue-900">Demand Predictions by Area</h2>
                 @foreach (var prediction in areaPredictions)
                 {
-                    <div class="mb-4 rounded-lg bg-white p-4 shadow">
-                        <h3 class="mb-2 text-lg font-semibold">Área ID: @prediction.Key</h3>
-                        <p><strong>Timestamp de Predicción:</strong> @prediction.Value.prediction_timestamp</p>
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full table-auto border-collapse">
-                                <thead>
-                                    <tr class="bg-gray-100">
-                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Fecha y Hora</th>
-                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Demanda Estimada (MWh)</th>
-                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Índice de Calor (°C)</th>
-                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Temperatura (°C)</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var detail in prediction.Value.predictions)
-                                    {
-                                        <tr class="border-t">
-                                            <td class="px-4 py-2 text-sm text-gray-600">@detail.timestamp</td>
-                                            <td class="px-4 py-2 text-sm text-gray-600">@detail.estimated_demand_mwh.ToString("F2")</td>
-                                            <td class="px-4 py-2 text-sm text-gray-600">@detail.heat_index.ToString("F2")</td>
-                                            <td class="px-4 py-2 text-sm text-gray-600">@detail.temperature_c.ToString("F1")</td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
+                    <div class="mb-6 rounded-xl border border-gray-100 bg-white p-6 shadow-lg">
+                        <button @onclick="() => ToggleArea(prediction.Key)" class="w-full text-left flex items-center justify-between">
+                            <h3 class="text-xl font-semibold text-blue-800">Area ID: @prediction.Key</h3>
+                            <svg class="h-5 w-5 transform text-blue-600 @(areaToggles.ContainsKey(prediction.Key) && areaToggles[prediction.Key] ? "rotate-180" : "")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                        @if (areaToggles.ContainsKey(prediction.Key) && areaToggles[prediction.Key])
+                        {
+                            <div class="mt-4">
+                                <p class="text-gray-600"><strong class="font-medium">Prediction Timestamp:</strong> @prediction.Value.prediction_timestamp</p>
+                                <div class="mt-4 overflow-x-auto">
+                                    <table class="min-w-full table-auto border-collapse rounded-lg bg-white shadow-sm">
+                                        <thead>
+                                            <tr class="bg-blue-50 text-blue-900">
+                                                <th class="px-6 py-3 text-left text-sm font-semibold">Date & Time</th>
+                                                <th class="px-6 py-3 text-left text-sm font-semibold">Estimated Demand (MWh)</th>
+                                                <th class="px-6 py-3 text-left text-sm font-semibold">Heat Index (°C)</th>
+                                                <th class="px-6 py-3 text-left text-sm font-semibold">Temperature (°C)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var detail in prediction.Value.predictions)
+                                            {
+                                                <tr class="border-t border-gray-100 transition-colors duration-150 hover:bg-gray-50">
+                                                    <td class="px-6 py-3 text-sm text-gray-600">@detail.timestamp</td>
+                                                    <td class="px-6 py-3 text-sm text-gray-600">@detail.estimated_demand_mwh.ToString("F2")</td>
+                                                    <td class="px-6 py-3 text-sm text-gray-600">@detail.heat_index.ToString("F2")</td>
+                                                    <td class="px-6 py-3 text-sm text-gray-600">@detail.temperature_c.ToString("F1")</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        }
                     </div>
                 }
             </div>
         }
         @if (quantumDecisions != null && quantumDecisions.Any())
         {
-            <div class="mt-4">
-                <h2 class="mb-2 text-xl font-semibold text-gray-700">Resultados de Optimización Cuántica</h2>
-                <div class="mb-4 rounded-lg bg-white p-4 shadow">
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full table-auto border-collapse">
-                            <thead>
-                                <tr class="bg-gray-100">
-                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Área ID</th>
-                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Nombre</th>
-                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Acción</th>
-                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Potencia Objetivo (MWh)</th>
-                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Potencia Disponible (MWh)</th>
-                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Prioridad</th>
-                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Nivel de Riesgo</th>
-                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Justificación</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var decision in quantumDecisions)
-                                {
-                                    <tr class="border-t">
-                                        <td class="px-4 py-2 text-sm text-gray-600">@decision.area_id</td>
-                                        <td class="px-4 py-2 text-sm text-gray-600">@decision.area_name</td>
-                                        <td class="px-4 py-2 text-sm text-gray-600">@decision.action</td>
-                                        <td class="px-4 py-2 text-sm text-gray-600">@decision.target_power_mwh.ToString("F2")</td>
-                                        <td class="px-4 py-2 text-sm text-gray-600">@decision.available_power_mwh.ToString("F2")</td>
-                                        <td class="px-4 py-2 text-sm text-gray-600">@decision.priority</td>
-                                        <td class="px-4 py-2 text-sm text-gray-600">@decision.risk_level</td>
-                                        <td class="px-4 py-2 text-sm text-gray-600">@decision.justification</td>
+            <div class="mt-6">
+                <h2 class="mb-4 text-2xl font-semibold text-blue-900">Quantum Optimization Results</h2>
+                <div class="mb-6 rounded-xl border border-gray-100 bg-white p-6 shadow-lg">
+                    <button @onclick="ToggleQuantumSection" class="flex w-full items-center justify-between text-left">
+                        <h3 class="text-xl font-semibold text-blue-800">Decisions by Area</h3>
+                        <svg class="h-5 w-5 transform text-blue-600 @(isQuantumSectionOpen ? "rotate-180" : "")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+                    @if (isQuantumSectionOpen)
+                    {
+                        <div class="mt-4 overflow-x-auto">
+                            <table class="min-w-full table-auto border-collapse rounded-lg bg-white shadow-sm">
+                                <thead>
+                                    <tr class="bg-blue-50 text-blue-900">
+                                        <th class="px-6 py-3 text-left text-sm font-semibold">Area ID</th>
+                                        <th class="px-6 py-3 text-left text-sm font-semibold">Name</th>
+                                        <th class="px-6 py-3 text-left text-sm font-semibold">Action</th>
+                                        <th class="px-6 py-3 text-left text-sm font-semibold">Target Power (MWh)</th>
+                                        <th class="px-6 py-3 text-left text-sm font-semibold">Available Power (MWh)</th>
+                                        <th class="px-6 py-3 text-left text-sm font-semibold">Priority</th>
+                                        <th class="px-6 py-3 text-left text-sm font-semibold">Risk Level</th>
+                                        <th class="px-6 py-3 text-left text-sm font-semibold">Justification</th>
                                     </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
+                                </thead>
+                                <tbody>
+                                    @foreach (var decision in quantumDecisions)
+                                    {
+                                        @if(decision.action == "solicitar_energia")
+                                        {
+                                            decision.action = "request_electricity";
+                                        }
+                                        @if(decision.action == "reducir_demanda")
+                                        {
+                                            decision.action = "decrease_demand";
+                                        }
+                                        @if(decision.risk_level == "bajo")
+                                        {
+                                            decision.risk_level = "low";
+                                        }
+                                        <tr class="border-t border-gray-100 transition-colors duration-150 hover:bg-gray-50">
+                                            <td class="px-6 py-3 text-sm text-gray-600">@decision.area_id</td>
+                                            <td class="px-6 py-3 text-sm text-gray-600">@decision.area_name</td>
+                                            <td class="px-6 py-3 text-sm text-gray-600">@decision.action</td>
+                                            <td class="px-6 py-3 text-sm text-gray-600">@decision.target_power_mwh.ToString("F2")</td>
+                                            <td class="px-6 py-3 text-sm text-gray-600">@decision.available_power_mwh.ToString("F2")</td>
+                                            <td class="px-6 py-3 text-sm text-gray-600">@decision.priority</td>
+                                            <td class="px-6 py-3 text-sm text-gray-600">@decision.risk_level</td>
+                                            <td class="px-6 py-3 text-sm text-gray-600">@decision.justification</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
                 </div>
             </div>
         }
@@ -131,6 +181,8 @@
     private string predictionMessage = string.Empty;
     private Dictionary<int, AreaPredictionDto>? areaPredictions;
     private List<QuantumDecisionDto>? quantumDecisions;
+    private Dictionary<int, bool> areaToggles = new();
+    private bool isQuantumSectionOpen = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -151,6 +203,25 @@
         }
     }
 
+    private void ToggleArea(int areaId)
+    {
+        if (areaToggles.ContainsKey(areaId))
+        {
+            areaToggles[areaId] = !areaToggles[areaId];
+        }
+        else
+        {
+            areaToggles[areaId] = true;
+        }
+        StateHasChanged();
+    }
+
+    private void ToggleQuantumSection()
+    {
+        isQuantumSectionOpen = !isQuantumSectionOpen;
+        StateHasChanged();
+    }
+
     private async Task GeneratePrediction()
     {
         if (areaInfo == null) return;
@@ -158,6 +229,8 @@
         predictionMessage = string.Empty;
         areaPredictions = null;
         quantumDecisions = null;
+        areaToggles.Clear();
+        isQuantumSectionOpen = false;
         try
         {
             var client = HttpClientFactory.CreateClient("EnerQuantumApi");
@@ -292,7 +365,7 @@
                 {
                     var quantumResults = await quantumResponse.Content.ReadFromJsonAsync<QuantumOptimizationResponseDto>();
                     quantumDecisions = quantumResults?.decisions;
-                    predictionMessage = "Predicciones y optimización cuántica generadas exitosamente.";
+                    predictionMessage = "AI Predictions And Quantum Optimization Loaded";
                 }
                 else
                 {
@@ -348,7 +421,7 @@
                 {
                     ["timestamp"] = eu.timestamp.ToString("yyyy-MM-ddTHH:mm:ssZ"),
                     ["areaId"] = eu.area_id,
-                    ["areaName"] = matchingArea?.name ?? "Unknown",
+                    ["areaName"] = matchingArea?.name,
                     ["latitude"] = matchingArea?.latitude ?? 21.1168,
                     ["longitude"] = matchingArea?.longitude ?? -101.6866,
                     ["gridType"] = matchingArea?.gridType ?? "microgrid:hospital",
